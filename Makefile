@@ -44,7 +44,7 @@ install-dev: venv
 	$(UV) pip install -e ".[dev]"
 
 build-ext:
-	$(UV) run python setup.py build_ext --inplace
+	ZLFI_NATIVE=1 $(UV) run python setup.py build_ext --inplace
 
 test-core: build-ext
 	$(UV) run --extra dev pytest tests/test_01_core.py
