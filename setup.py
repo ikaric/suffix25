@@ -1,16 +1,36 @@
 """Build script for Cython extension."""
 
 import os
+import subprocess
+import sys
 
 from setuptools import setup, Extension
 
-# Default: portable flags safe for pip wheels and cross-CPU distribution.
-# Set ZLFI_NATIVE=1 for local builds to enable -march=native -ffast-math.
-_portable_flags = ["-O3", "-fopenmp"]
-_native_flags = ["-O3", "-march=native", "-ffast-math", "-fopenmp"]
+
+def _detect_openmp():
+    """Return (compile_flags, link_flags) for OpenMP, or empty lists if unavailable."""
+    if sys.platform == "darwin":
+        # Apple clang lacks OpenMP; check for Homebrew libomp.
+        try:
+            prefix = subprocess.check_output(
+                ["brew", "--prefix", "libomp"], stderr=subprocess.DEVNULL
+            ).decode().strip()
+        except (FileNotFoundError, subprocess.CalledProcessError):
+            return [], []
+        return (
+            ["-Xpreprocessor", "-fopenmp", f"-I{prefix}/include"],
+            [f"-L{prefix}/lib", "-lomp"],
+        )
+    return ["-fopenmp"], ["-fopenmp"]
+
+
+_omp_compile, _omp_link = _detect_openmp()
+
+_portable_flags = ["-O3"] + _omp_compile
+_native_flags = ["-O3", "-march=native", "-ffast-math"] + _omp_compile
 
 compile_args = _native_flags if os.environ.get("ZLFI_NATIVE") == "1" else _portable_flags
-link_args = ["-fopenmp"]
+link_args = list(_omp_link)
 
 try:
     from Cython.Build import cythonize
