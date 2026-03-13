@@ -161,11 +161,15 @@ $$\bar{\delta}(N, M) = \frac{\delta(N, M)}{T_\delta} \in [0, 1]$$
 
 $$\sum_{k=1}^{l_i} k = \frac{l_i(l_i + 1)}{2}$$
 
-4. **Accumulate and normalize** — The full score is:
-
-$$\bar{\delta}(N, M) = T_\delta^{-1} \sum_{i=1}^{|N|} \frac{l_i(l_i + 1)}{2}$$
-
-Total complexity: $O(|N| + |M|)$.
+4. **Accumulate and normalize** — The raw similarity is:
+ 
+ $$\bar{\delta}_{raw}(N, M) = T_\delta^{-1} \sum_{i=1}^{|N|} \frac{l_i(l_i + 1)}{2}$$
+ 
+ 5. **Apply Cube Root** — Finally, the score is stabilized for linear blending using cube root normalization:
+ 
+ $$\bar{\delta}(N, M) = \sqrt[3]{\bar{\delta}_{raw}(N, M)} \in [0, 1]$$
+ 
+ Total complexity: $O(|N| + |M|)$.
 
 ### BM25 (Term Frequency)
 
@@ -188,9 +192,12 @@ where $N$ is the total number of documents and $df(t)$ is the number of document
 
 ### Late Fusion (Hybrid Score)
 
-The BM25 raw scores are min-max normalized to $[0, 1]$ before fusion:
-
-$$\text{BM25}_{\text{norm}}(Q, d) = \frac{\text{BM25}(Q, d) - \min_d}{\max_d - \min_d}$$
+The BM25 raw scores are max-scaled to $[0, 1]$ across the query batch before fusion:
+ 
+ $$\text{BM25}_{\text{norm}}(Q, d) = \frac{\text{BM25}(Q, d)}{\max_{d \in \text{Batch}} \text{BM25}(Q, d)}$$
+ 
+ > [!NOTE] 
+ > When $\alpha = 0$ (pure BM25), scores are returned **unnormalized** to preserve raw frequency weighting. Normalization is only applied when $0 < \alpha < 1$.
 
 The final hybrid score for each document $d$ is:
 

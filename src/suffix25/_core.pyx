@@ -14,7 +14,7 @@ Within-automaton prefetching hides memory latency.
 from libc.stdlib cimport malloc, free, calloc, realloc
 from libc.string cimport memcpy, memset
 from cython.parallel cimport prange
-from libc.math cimport log
+from libc.math cimport log, cbrt
 
 cdef extern from *:
     void __builtin_prefetch(const void *addr, int rw, int locality) nogil
@@ -278,7 +278,8 @@ cdef double csa_query(CompactSA *csa, const unsigned char *data, int data_len) n
     cdef long long t_delta = (n_len * (n_len + 1) * (n_len + 2)) // 6
     if t_delta == 0:
         return 0.0
-    return <double>delta_score / <double>t_delta
+    cdef double raw_score = <double>delta_score / <double>t_delta
+    return cbrt(raw_score)
 
 
 # ============================================================
@@ -590,7 +591,7 @@ cdef class BM25Index:
 
         self.idf_dirty = False
 
-    cpdef list score_all(self, int[:] query_token_ids):
+    cpdef list score_all(self, int[:] query_token_ids, bint normalize=True):
         cdef int q_len = query_token_ids.shape[0]
         cdef int doc_count = self.num_docs
         cdef list result = [0.0] * doc_count
@@ -634,8 +635,17 @@ cdef class BM25Index:
                 term_score = idf * (tf * (self.k1 + 1.0)) / (tf + self.k1 * norm)
                 scores[doc_id] += term_score * q_tf
 
+        cdef double max_score = 0.0
+        if normalize:
+            for doc_id in range(doc_count):
+                if scores[doc_id] > max_score:
+                    max_score = scores[doc_id]
+
         for doc_id in range(doc_count):
-            result[doc_id] = scores[doc_id]
+            if normalize and max_score > 0.0:
+                result[doc_id] = scores[doc_id] / max_score
+            else:
+                result[doc_id] = scores[doc_id]
 
         free(scores)
         return result
