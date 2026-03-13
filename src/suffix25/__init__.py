@@ -107,12 +107,12 @@ class Corpus:
         else:
             raise TypeError("doc must be a str or Document")
 
-    def _get_bm25_scores(self, query: str) -> list[float]:
+    def _get_bm25_scores(self, query: str, normalize: bool = True) -> list[float]:
         if not self._states:
             return []
         tokens = _tokenize(query)
         token_ids = [self._vocab[t] for t in tokens if t in self._vocab]
-        return list(self._bm25.score_all(array.array("i", token_ids)))
+        return list(self._bm25.score_all(array.array("i", token_ids), normalize=normalize))
 
     def score_all(self, query: str, alpha: float = 0.5) -> list[float]:
         """Score all documents against the query using late fusion."""
@@ -122,29 +122,16 @@ class Corpus:
         if alpha == 1.0:
             return list(_batch_scores(query, self._states))
 
-        bm25_scores = self._get_bm25_scores(query)
         if alpha == 0.0:
-            return bm25_scores
+            return self._get_bm25_scores(query, normalize=False)
 
+        bm25_scores = self._get_bm25_scores(query, normalize=True)
         sa_scores = _batch_scores(query, self._states)
 
         if not bm25_scores:
             return list(sa_scores)
 
-        min_b = min(bm25_scores)
-        max_b = max(bm25_scores)
-        range_b = max_b - min_b
-
-        result = [0.0] * len(sa_scores)
-        if range_b == 0:
-            for i in range(len(sa_scores)):
-                result[i] = alpha * sa_scores[i]
-        else:
-            for i in range(len(sa_scores)):
-                norm_b = (bm25_scores[i] - min_b) / range_b
-                result[i] = (alpha * sa_scores[i]) + ((1.0 - alpha) * norm_b)
-
-        return result
+        return [(alpha * sa) + ((1.0 - alpha) * bm) for sa, bm in zip(sa_scores, bm25_scores)]
 
     def search(self, query: str, k: int = 10, alpha: float = 0.5) -> list[int]:
         """Return the indices of the top K highest scoring documents."""

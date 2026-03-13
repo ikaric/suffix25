@@ -96,7 +96,7 @@ def suffix25(n: str, m: str | list[State]) -> float:
     # 3. Normalize exactly as before
     t_delta = (n_len * (n_len + 1) * (n_len + 2)) // 6
 
-    return delta_score / t_delta
+    return math.cbrt(delta_score / t_delta)
 
 
 class BM25Index:
@@ -160,7 +160,7 @@ class BM25Index:
 
         self._idf_dirty = False
 
-    def score_all(self, query_token_ids: list[int]) -> list[float]:
+    def score_all(self, query_token_ids: list[int], normalize: bool = True) -> list[float]:
         """Scores all documents against the query (ATIRE BM25 variant)."""
         scores = [0.0] * self.num_docs
         if self.num_docs == 0 or not query_token_ids:
@@ -189,6 +189,12 @@ class BM25Index:
                 )
                 scores[doc_id] += term_score * q_tf
 
+        if not normalize:
+            return scores
+
+        max_score = max(scores) if scores else 0.0
+        if max_score > 0.0:
+            return [s / max_score for s in scores]
         return scores
 
     def dumps(self) -> bytes:
